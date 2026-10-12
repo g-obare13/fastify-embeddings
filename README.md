@@ -197,6 +197,104 @@ await app.register(fastifyEmbeddings, { provider: customProvider });
 await app.close();
 ```
 
+## Self-hosted with Ollama
+
+Ollama serves embeddings from `POST /api/embed`, which the `ollama` format already speaks, so a self-hosted server needs no special configuration.
+
+### Environment variables and the .env workflow
+
+| Variable | Purpose | Placeholder in `.env.example` |
+| --- | --- | --- |
+| `EMBEDDINGS_BASE_URL` | Ollama API root. Setting it selects the HTTP provider. | `http://ollama.example.internal:11434` |
+| `EMBEDDINGS_FORMAT` | Wire format. Use `ollama`. | `ollama` |
+| `EMBEDDINGS_MODEL` | Model to send. The `nomic` preset expects `nomic-embed-text`. | `nomic-embed-text` |
+
+Copy `.env.example` to `.env` and replace the placeholders with your own values. `.env` and `.env.*` are git-ignored, so only the placeholder template is ever committed. Shell variables take priority over `.env` values, which means CI and production can inject real values with no file at all.
+
+<!-- docs-snippet: ollama-self-hosted.ts -->
+```ts
+import Fastify from 'fastify';
+import { fastifyEmbeddings } from 'fastify-embeddings';
+
+const app = Fastify();
+await app.register(fastifyEmbeddings, {
+  preset: 'nomic',
+  batchSize: 8,
+  concurrency: 1,
+  timeoutMs: 120_000,
+});
+const result = await app.embeddings.embed('What is vector search?', { inputType: 'query' });
+app.log.info({ model: result.model, dimensions: result.dimensions }, 'embedded with self-hosted Ollama');
+await app.close();
+```
+
+### What the nomic preset does
+
+The `nomic` preset sets the model id to `nomic-embed-text` and applies the two asymmetric prefixes that model was trained with: `search_query: ` for queries and `search_document: ` for documents. Because the prefixes differ, the same text embedded as a query and as a document deliberately produces different vectors. Pass `inputType` so the correct prefix is applied, and keep queries and documents on separate code paths.
+
+### Tuning for a small, single-parallel server
+
+A small Ollama instance handles one request at a time, so raising concurrency only queues work and grows memory use.
+
+- `batchSize: 8` keeps each request small and predictable. Larger batches raise peak memory on the server without improving throughput on a single-parallel host.
+- `concurrency: 1` matches the server's actual parallelism. Raise it only when you know the host serves parallel requests.
+- `timeoutMs: 120000` covers a cold model load. The 30 second default is often too short for the first request after a restart.
+- `retries` can stay at its default for transient failures. Set it to `0` when you want a failure to surface immediately instead of after a retry.
+
+<!-- docs-snippet: ollama-tuning.ts -->
+```ts
+import { createEmbedder } from 'fastify-embeddings';
+
+const embedder = createEmbedder({
+  baseURL: process.env.EMBEDDINGS_BASE_URL,
+  format: 'ollama',
+  model: process.env.EMBEDDINGS_MODEL,
+  preset: 'nomic',
+  batchSize: 8,
+  concurrency: 1,
+  timeoutMs: 120_000,
+});
+
+const health = await embedder.healthCheck();
+if (health.ok) {
+  process.stdout.write(`healthy: ${String(health.dimensions)} dimensions\n`);
+}
+await embedder.close();
+```
+
+### `OLLAMA_KEEP_ALIVE` and cold starts
+
+By default Ollama unloads a model after a few minutes of inactivity, and the next request pays for the load. That first call can take tens of seconds, which is easily enough to exceed a short `timeoutMs`. Either raise `timeoutMs` as shown above, or keep the model resident by setting `OLLAMA_KEEP_ALIVE` on the server, for example `30m`, or `-1` to keep it loaded until the server stops. Expect the first call of a run to be the slowest.
+
+### Context length
+
+Ollama truncates input that exceeds the model's context window, and a truncated document silently loses everything past the limit. Embed chunks that fit comfortably inside the window instead of whole documents, and check the model's context size before increasing `batchSize`, because a batch of long inputs multiplies the tokens in a single request.
+
+### Real server smoke test
+
+`pnpm smoke:real` exercises a live Ollama server end to end. It reads `EMBEDDINGS_BASE_URL`, `EMBEDDINGS_FORMAT` and `EMBEDDINGS_MODEL` from your shell or from a local `.env`, names any variable that is unset, and prints `PASS` or `FAIL` for each check:
+
+- `healthCheck` succeeds and reports 768 dimensions and the configured model
+- the same text embedded as a query and as a document returns different vectors with the `nomic` preset
+- similar sentences score higher than unrelated ones
+- 50 texts with `batchSize: 8` and `concurrency: 1` come back in input order with the expected count and batch sizes
+- a dead local port returns `EMBEDDING_PROVIDER_UNREACHABLE` quickly, without contacting the real server
+- an unknown model against the real server returns `EMBEDDING_PROVIDER_ERROR`
+- captured logs contain no input text, no vectors and no API key
+
+The script is written for a server that may be shared with other projects. It only calls the embedding endpoint, never pulls or deletes models, never calls an admin endpoint, and prints a host class rather than the server address.
+
+### Security
+
+Ollama has no authentication. Anything that can reach the port can use every model on the host and can pull or delete models. Do not expose `11434` to the internet, and do not commit a real server address, which is why `.env.example` ships with placeholders only.
+
+Two ways to keep it private:
+
+- **SSH tunnel.** Bind Ollama to loopback on the server and forward the port from your machine. `EMBEDDINGS_BASE_URL` then points at a local port and the service is never publicly reachable.
+- **Reverse proxy with authentication.** Put a proxy in front of Ollama that terminates TLS and requires a shared secret, then send that secret from the `headers` option so the library adds it to every request.
+
+Both approaches keep the address and any credential out of source control: store them in `.env` locally and in your platform's secret store everywhere else.
+
 ## Cache recipe
 
 This optional wrapper uses an LRU cache capped at 500 entries by default. Change the limit with `withCache(provider, maxEntries)`. Keys include the configured model, `inputType`, and text; texts longer than 1,024 characters are represented by a SHA-256 digest. Vectors are copied on storage and return. A full cache hit has no usage to report; partial misses preserve the provider's usage for the texts it computed.
