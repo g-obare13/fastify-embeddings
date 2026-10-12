@@ -19,7 +19,9 @@ The library defaults to the local `Xenova/all-MiniLM-L6-v2` model when no HTTP b
 pnpm add @huggingface/transformers
 ```
 
-On the first local embedding call, Transformers downloads the model. By default, model files are stored in the Hugging Face cache (`~/.cache/huggingface/hub`, or `%USERPROFILE%\.cache\huggingface\hub` on Windows). Set `HF_HOME` before starting Node.js to use a different cache directory. To avoid a model download, configure an HTTP provider with `EMBEDDINGS_BASE_URL` or explicit options.
+On the first local embedding call, `@huggingface/transformers` downloads the model. For the default `Xenova/all-MiniLM-L6-v2` model that is roughly 86 MB, and a cold first call took about 80 seconds in testing.
+
+Model files are cached inside the installed package, at `node_modules/@huggingface/transformers/.cache`, and the loaded model stays in memory for the life of the process. `HF_HOME` has no effect here, because that variable belongs to the Python `huggingface_hub` library and this package never reads it. To relocate the cache, set `cacheDir` on the Transformers `env` object before the first embedding call: `import { env } from '@huggingface/transformers'` then `env.cacheDir = '/path/to/cache'`. The provider imports the same module instance, so the change applies to embeddings made through this library. To avoid a model download entirely, configure an HTTP provider with `EMBEDDINGS_BASE_URL` or explicit options.
 
 ## Quick start
 
