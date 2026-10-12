@@ -1,0 +1,13 @@
+node_modules
+dist
+coverage
+*.log
+.env
+
+# graft's local graph cache — regenerable, not committed (run `graft build`).
+graft/
+.claude
+.gemini
+.github/copilot-instructions.md
+.mcp.json
+GEMINI.md

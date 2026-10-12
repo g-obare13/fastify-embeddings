@@ -1,0 +1,100 @@
+{
+  "name": "fastify-embeddings",
+  "version": "0.1.0",
+  "description": "Fastify 5 plugin and standalone embedder that turns text into vectors for vector search.",
+  "keywords": [
+    "fastify",
+    "fastify-plugin",
+    "embeddings",
+    "vector-search",
+    "ollama",
+    "openai",
+    "rag"
+  ],
+  "license": "MIT",
+  "type": "module",
+  "engines": {
+    "node": ">=20.3.0"
+  },
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "typesVersions": {
+    "*": {
+      "testing": [
+        "dist/testing.d.ts"
+      ]
+    }
+  },
+  "exports": {
+    ".": {
+      "import": {
+        "types": "./dist/index.d.ts",
+        "default": "./dist/index.js"
+      },
+      "require": {
+        "types": "./dist/index.d.cts",
+        "default": "./dist/index.cjs"
+      }
+    },
+    "./testing": {
+      "import": {
+        "types": "./dist/testing.d.ts",
+        "default": "./dist/testing.js"
+      },
+      "require": {
+        "types": "./dist/testing.d.cts",
+        "default": "./dist/testing.cjs"
+      }
+    },
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "sideEffects": false,
+  "scripts": {
+    "build": "tsup && node scripts/verify-dist.mjs",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint . && node scripts/check-conventions.mjs",
+    "test": "vitest run",
+    "test:coverage": "vitest run --coverage",
+    "docs:snippets": "node scripts/check-docs-snippets.mjs",
+    "example:basic": "tsx examples/basic/index.ts",
+    "example:custom-provider": "tsx examples/custom-provider/index.ts",
+    "example:custom-http": "tsx examples/custom-http/index.ts",
+    "check": "pnpm typecheck && pnpm lint && pnpm test:coverage && pnpm build && pnpm docs:snippets"
+  },
+  "peerDependencies": {
+    "@huggingface/transformers": "^3.0.0",
+    "fastify": "^5.0.0"
+  },
+  "peerDependenciesMeta": {
+    "@huggingface/transformers": {
+      "optional": true
+    }
+  },
+  "dependencies": {
+    "fastify-plugin": "^6.0.1",
+    "zod": "^4.6.6"
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "@types/node": "^26.6.5",
+    "@vitest/coverage-v8": "^5.0.3",
+    "eslint": "^10.12.0",
+    "fastify": "^5.12.5",
+    "tsup": "^8.5.1",
+    "tsx": "^4.23.15",
+    "typescript": "^6.0.3",
+    "typescript-eslint": "^8.71.1",
+    "undici": "^8.11.2",
+    "vitest": "^5.0.3"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "esbuild"
+    ]
+  }
+}
