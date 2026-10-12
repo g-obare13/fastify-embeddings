@@ -2,6 +2,57 @@
 
 Fastify 5 plugin and standalone TypeScript library for generating text embeddings. It batches requests, preserves input order, validates vector dimensions, and returns model and usage metadata when available.
 
+## What this library does
+
+It turns text into vectors. That is the whole job. The call below is a real one, not pseudocode: register the plugin, then hand `embed` one string or an array of strings.
+
+<!-- docs-snippet: embed-call.ts -->
+```ts
+import Fastify from 'fastify';
+import { fastifyEmbeddings } from 'fastify-embeddings';
+
+const app = Fastify();
+await app.register(fastifyEmbeddings, {
+  baseURL: 'http://localhost:11434',
+  format: 'ollama',
+  preset: 'nomic',
+});
+
+const { vectors, model, dimensions, usage } = await app.embeddings.embed(['some text', 'more text']);
+app.log.info(
+  { model, dimensions, vectors: vectors.length, tokens: usage?.totalTokens },
+  'embedded two texts in one batch',
+);
+await app.close();
+```
+
+Everything else in this repository is scaffolding around that call: either one HTTP request to an embeddings API, or one in-process model call.
+
+## What it buys you
+
+The engine is a few hundred lines, and it earns its keep in these places:
+
+1. **Batching with bounded concurrency.** Hand it 10,000 strings and it splits them into chunks (`batchSize`, default 32) and runs a limited number at once (`concurrency`, default 2).
+2. **Order preservation.** `vectors[0]` is always the vector for `input[0]`, however the batches happen to complete. This is where hand-written versions quietly break.
+3. **One result shape**, whether the provider is OpenAI, Ollama, a local model, or an object you wrote yourself.
+4. **A dimension guard**, so a provider silently changing its vector size becomes an error instead of a corrupted index.
+5. **L2 normalization by default**, because cosine search expects unit vectors.
+6. **HTTP resilience**: retries with backoff and jitter, `Retry-After` honoured, a per-attempt timeout, and abort support.
+7. **Typed errors** such as `EMBEDDING_RATE_LIMITED`, `EMBEDDING_TIMEOUT`, and `EMBEDDING_PROVIDER_UNREACHABLE`, each carrying an HTTP status.
+8. **Fastify wiring**: `app.embeddings`, cleanup on `onClose`, an optional route, and named embedders.
+9. **Log hygiene**: it never logs your input text, your vectors, or your API key.
+10. **A mock provider**, so your tests never need a network.
+
+## What it does not do
+
+It is **not** a vector database. It does not store vectors, search them, chunk documents, rerank results, or manage collections. Qdrant, pgvector, and Pinecone do that. The app in `examples/ollama-qdrant` demonstrates the handoff between this library and a database, and is not part of the library itself.
+
+If your project embeds a handful of strings in one place, a short `fetch` call is simpler and you should skip this library. It pays off when you have many texts, more than one provider, or you need retries, ordering, and observability.
+
+## TODOs
+
+- **Document chunking and parsing.** Split long documents, and formats other than plain strings, into embedding sized pieces before they reach `embed`. Today that is the caller's job, and it is the most common cause of poor retrieval quality in practice.
+
 ## Install and requirements
 
 - Node.js **20.3 or newer**.
