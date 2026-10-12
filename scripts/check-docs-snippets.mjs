@@ -94,5 +94,12 @@ try {
   });
   process.stdout.write(`README snippets match docs-snippets and typecheck against ${tarballName}.\n`);
 } finally {
-  rmSync(tempDir, { recursive: true, force: true });
+  // Cleanup must never fail the check. On Windows a lingering npm handle can
+  // make this throw EBUSY or EPERM right after the child process exits, which
+  // would otherwise turn a passing check into a red build.
+  try {
+    rmSync(tempDir, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 });
+  } catch {
+    // Ignore: the operating system reclaims its own temp directory.
+  }
 }
