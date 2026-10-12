@@ -2,7 +2,12 @@ node_modules
 dist
 coverage
 *.log
+
+# Environment files. Real values stay local; only the placeholder template is
+# tracked. See .env.example.
 .env
+.env.*
+!.env.example
 
 # graft's local graph cache — regenerable, not committed (run `graft build`).
 graft/
