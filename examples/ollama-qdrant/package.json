@@ -1,0 +1,21 @@
+{
+  "name": "fastify-embeddings-ollama-qdrant-example",
+  "private": true,
+  "type": "module",
+  "description": "Standalone demo that embeds documents with a self-hosted Ollama server and stores the vectors in Qdrant.",
+  "scripts": {
+    "start": "tsx index.ts",
+    "cleanup": "tsx index.ts --cleanup",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@qdrant/js-client-rest": "^1.12.0",
+    "dotenv": "^18.0.7",
+    "fastify-embeddings": "file:../.."
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.5",
+    "tsx": "^4.23.15",
+    "typescript": "^6.0.3"
+  }
+}
