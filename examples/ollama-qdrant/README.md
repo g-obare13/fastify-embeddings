@@ -72,3 +72,15 @@ touched.
 | `QDRANT_URL` | Qdrant API root |
 | `QDRANT_API_KEY` | Qdrant API key |
 | `QDRANT_COLLECTION` | Optional. Overrides the collection name and must start with `fe-test-` |
+
+## Version matching
+
+The Qdrant client warns when its major version differs from the server, or when
+the minor version differs by more than one. The dependency is pinned to
+`~1.17.0`, which matches a `1.17.x` server. Adjust it to match your own server
+version, otherwise the client logs a compatibility warning on every run.
+
+Sending an API key over plain HTTP also makes the client warn that the
+connection is insecure, because the key travels in clear text. Terminate TLS in
+front of Qdrant, or reach it over an SSH tunnel, rather than exposing the HTTP
+port.
