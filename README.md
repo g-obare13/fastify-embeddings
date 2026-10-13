@@ -439,6 +439,53 @@ export function withCache(baseProvider: EmbeddingProvider, maxEntries = 500): Em
 }
 ```
 
+## Telemetry (OpenTelemetry)
+
+`fastify-embeddings/otel` wraps any provider so that every batch becomes one OpenTelemetry span. It is a separate subpath, so an application that does not import it never loads the OpenTelemetry API.
+
+<!-- docs-snippet: otel.ts -->
+```ts
+import Fastify from 'fastify';
+import { fastifyEmbeddings, httpProvider, presets } from 'fastify-embeddings';
+import { withTelemetry } from 'fastify-embeddings/otel';
+
+const app = Fastify();
+await app.register(fastifyEmbeddings, {
+  provider: withTelemetry(
+    httpProvider({ baseURL: 'http://localhost:11434', format: 'ollama', preset: presets.nomic }),
+  ),
+  batchSize: 8,
+  concurrency: 1,
+});
+
+const result = await app.embeddings.embed(['one document', 'another document']);
+app.log.info({ vectors: result.vectors.length }, 'each provider batch produced one span');
+await app.close();
+```
+
+A provider call is one batch, so the span covers the batch rather than the whole `embed` call. The span name is `embeddings <model>` and the span kind is `CLIENT`.
+
+| Attribute | Meaning |
+| --- | --- |
+| `gen_ai.operation.name` | Always `embeddings` |
+| `gen_ai.system` | This library's provider name: `http`, `local`, `mock`, or your own |
+| `gen_ai.request.model` | The configured model |
+| `gen_ai.response.model` | The model the provider reported, when it differs from the configured one |
+| `gen_ai.usage.input_tokens` | `usage.promptTokens`, when the provider reports usage |
+| `embeddings.batch.size` | Texts in this provider call |
+| `embeddings.vector.count` | Vectors returned |
+| `embeddings.dimensions` | Length of the returned vectors |
+| `embeddings.input_type` | `query` or `document` |
+
+On failure the span is marked as an error, `error.type` carries the `EmbeddingError` code, and the exception is recorded before the original error is rethrown.
+
+Zero configuration is the point: `@opentelemetry/api` returns a no-op tracer until your application registers a `TracerProvider`, so the wrapper is inert until you set one up and the OpenTelemetry SDK is never a dependency of this library. Register an SDK as you normally would, for example `@opentelemetry/sdk-trace-base` with a span processor, and spans appear.
+
+Two caveats worth knowing:
+
+- The generative AI attributes are still marked *development* in the OpenTelemetry specification, so those names may change upstream.
+- `recordException` stores the error message on the span. Provider messages never contain your input text or API key, but `EMBEDDING_PROVIDER_UNREACHABLE` does include the provider origin, so spans can carry your internal hostname.
+
 ## Output transforms and hooks
 
 `transformOutput` runs after the provider response has passed its dimension check and after optional normalization. The returned result's `dimensions` is computed from the transformed vectors, so truncation reports the shorter size.
