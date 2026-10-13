@@ -42,16 +42,17 @@ The engine is a few hundred lines, and it earns its keep in these places:
 8. **Fastify wiring**: `app.embeddings`, cleanup on `onClose`, an optional route, and named embedders.
 9. **Log hygiene**: it never logs your input text, your vectors, or your API key.
 10. **A mock provider**, so your tests never need a network.
+11. **Document chunking**, in the separate `fastify-embeddings/documents` entry point: read a file, split it into embedding sized chunks, and keep every vector paired with the text it came from.
 
 ## What it does not do
 
-It is **not** a vector database. It does not store vectors, search them, chunk documents, rerank results, or manage collections. Qdrant, pgvector, and Pinecone do that. The app in `examples/ollama-qdrant` demonstrates the handoff between this library and a database, and is not part of the library itself.
+It is **not** a vector database and it **does not parse binary formats**. It does not store vectors, search them, rerank results, or manage collections. Qdrant, pgvector, and Pinecone do that. The app in `examples/ollama-qdrant` demonstrates the handoff between this library and a database, and is not part of the library itself. Chunking is built in, but turning a PDF or a DOCX into text is not, because a real parser is a large dependency that belongs in your application.
 
 If your project embeds a handful of strings in one place, a short `fetch` call is simpler and you should skip this library. It pays off when you have many texts, more than one provider, or you need retries, ordering, and observability.
 
 ## TODOs
 
-- **Document chunking and parsing.** Split long documents, and formats other than plain strings, into embedding sized pieces before they reach `embed`. Today that is the caller's job, and it is the most common cause of poor retrieval quality in practice.
+- **Binary format parsers.** Chunking now ships in `fastify-embeddings/documents`, but PDF, DOCX, and HTML parsing do not. Extraction is pluggable through `registerExtractor` and the choice of parser belongs in the calling application, so the library stays dependency free.
 
 ## Install and requirements
 
@@ -439,6 +440,89 @@ export function withCache(baseProvider: EmbeddingProvider, maxEntries = 500): Em
 }
 ```
 
+## Document processing
+
+`fastify-embeddings/documents` reads files, splits them into embedding sized chunks, and embeds the chunks while keeping every vector paired with the text it came from.
+
+It is a separate entry point so the core library stays free of parser dependencies and file system access. It is text first and has no third party dependencies: plain text formats work out of the box, and PDF, DOCX, and HTML are added by registering an extractor rather than by growing this package.
+
+<!-- docs-snippet: documents.ts -->
+```ts
+import { createEmbedder, mockProvider } from 'fastify-embeddings';
+import { chunkText, embedDocuments, loadDocument } from 'fastify-embeddings/documents';
+
+const document = await loadDocument({ buffer: new Uint8Array(), filename: 'handbook.md' });
+const chunks = chunkText(document.text, { chunkSize: 800, chunkOverlap: 100 });
+
+const embedder = createEmbedder({ provider: mockProvider({ dimensions: 768 }) });
+const result = await embedDocuments(
+  [{ path: 'handbook.md' }, { text: 'An inline note', source: 'notes' }],
+  embedder,
+  { chunkSize: 800, chunkOverlap: 100, inputType: 'document' },
+);
+
+void chunks;
+void result.chunks;
+void result.vectors;
+void result.model;
+void result.dimensions;
+await embedder.close();
+```
+
+### Sources
+
+A document is one of three things.
+
+| Source | Use it for |
+| --- | --- |
+| `{ path: 'handbook.md' }` | Files on disk. The path is read as given, so never build one from untrusted input such as a request body. |
+| `{ buffer: bytes, filename: 'handbook.md' }` | Uploads and in-memory bytes. The filename is required, because it is how the format is chosen. The library never guesses a format. |
+| `{ text: 'plain text', source: 'inline' }` | Text you already have. No extractor runs. |
+
+Built-in extensions are `.txt`, `.md`, `.markdown`, `.json`, `.jsonl`, `.csv`, `.tsv`, `.log`, `.yaml`, and `.yml`. A file with any other extension throws `EMBEDDING_DOCUMENT_UNSUPPORTED` naming the extensions that are registered, unless you pass the `extractor` option.
+
+### Chunking
+
+`chunkText(text, options)` splits one string and returns `DocumentChunk[]`: the `text`, its zero-based `index`, and the exact `start` and `end` character offsets in the source, so a hit can be mapped back and highlighted in the original document.
+
+| Option | Default | Meaning |
+| --- | --- | --- |
+| `chunkSize` | `1000` | Largest chunk, in units of `measure`. |
+| `chunkOverlap` | `200` | How much text neighbouring chunks share, so a fact split across a boundary is whole in at least one chunk. Must be smaller than `chunkSize`. |
+| `separators` | paragraph, line, sentence, word | Preferred split points, most preferred first. |
+| `measure` | character count | Measures a piece of text. Pass a token counter to size chunks in tokens, which is the accurate way to keep a chunk inside a model's context window. |
+
+A chunk grows to `chunkSize` and then backs up to the last preferred boundary in that window, so chunks tend to end on a paragraph or a sentence rather than mid-word. A boundary that would leave a chunk less than half full is ignored, and a whitespace-only run never becomes a chunk.
+
+### Extracting other formats
+
+An extractor turns bytes into text. Register one and every source, chunk option, and embedder keeps working.
+
+<!-- docs-snippet: documents-extractor.ts -->
+```ts
+import { registerExtractor } from 'fastify-embeddings/documents';
+
+registerExtractor({
+  name: 'markdown-with-frontmatter',
+  extensions: ['.mdown'],
+  extract: (input) => new TextDecoder().decode(input.buffer),
+});
+```
+
+`extract` receives `{ buffer, filename, signal }` and returns either a string or `{ text, metadata }`. Metadata is copied onto every chunk from that document, which is where a page number or a source URL belongs. Extraction is pluggable because a real PDF or DOCX parser is a large dependency with its own supply chain, and the choice of one belongs in your application rather than in this library.
+
+### Embedding chunks
+
+`embedDocuments(sources, embedder, options)` reads, chunks, and embeds in one call. It returns `{ chunks, vectors, model, dimensions, usage? }`, where `chunks[i]` is always the text behind `vectors[i]`, across documents, and `usage` is summed over every batch. If the provider returns a different number of vectors than there were chunks, the call fails with `EMBEDDING_PROVIDER_ERROR` rather than mispairing them.
+
+Chunks are embedded with `inputType: 'document'` by default, so a preset keeps prefixing queries and documents differently. Use `chunkDocuments` when you want the chunks without embedding them.
+
+### Limits
+
+- `maxBytes` defaults to 10 MB per document and throws `EMBEDDING_DOCUMENT_TOO_LARGE` above it.
+- A NUL byte makes the built-in extractor reject a file as binary with `EMBEDDING_DOCUMENT_INVALID` instead of decoding it into noise.
+- `signal` cancels reading, extraction, and the embed call behind it.
+
 ## Telemetry (OpenTelemetry)
 
 `fastify-embeddings/otel` wraps any provider so that every batch becomes one OpenTelemetry span. It is a separate subpath, so an application that does not import it never loads the OpenTelemetry API.
@@ -609,6 +693,9 @@ All library errors are `EmbeddingError` instances with stable `code` and `status
 | `EMBEDDING_RATE_LIMITED` | 429 | Provider rate limit remains after retries |
 | `EMBEDDING_TIMEOUT` | 504 | Provider request timed out |
 | `EMBEDDING_DIMENSION_MISMATCH` | 500 | A vector's dimensions differed from the expected dimensions |
+| `EMBEDDING_DOCUMENT_UNSUPPORTED` | 415 | No extractor handles the document's format |
+| `EMBEDDING_DOCUMENT_TOO_LARGE` | 413 | Document exceeds the `maxBytes` limit |
+| `EMBEDDING_DOCUMENT_INVALID` | 400 | A document could not be read or extracted, looks binary, or a load option was invalid |
 
 <!-- docs-snippet: errors.ts -->
 ```ts
