@@ -53,6 +53,7 @@ If your project embeds a handful of strings in one place, a short `fetch` call i
 ## TODOs
 
 - **Binary format parsers.** Chunking now ships in `fastify-embeddings/documents`, but PDF, DOCX, and HTML parsing do not. Extraction is pluggable through `registerExtractor` and the choice of parser belongs in the calling application, so the library stays dependency free.
+- **Aligned chunk starts.** A chunk ends on a preferred separator, but with `chunkOverlap` above zero the next chunk starts at `end - chunkOverlap` characters, which is usually mid-word. Snapping that start forward to the next separator would preserve the overlap without feeding the model a fragment. A real-server run at `chunkSize: 800` produced chunks beginning `"d number at once"` and `"kens: 4 }, };"`.
 
 ## Install and requirements
 
@@ -128,6 +129,8 @@ Without `EMBEDDINGS_BASE_URL`, the default is the local MiniLM provider. When th
 | `EMBEDDINGS_API_KEY` | HTTP bearer token | unset |
 
 Explicit options take precedence over environment variables, which take precedence over preset defaults. Set `env: {}` when calling `createEmbedder()` to ignore the process environment.
+
+One warning about the defaults: `batchSize` (32 texts) and `timeoutMs` (30 seconds) suit a hosted API. A small or self-hosted server, such as a single parallel Ollama, times out on the first sizeable document with `EMBEDDING_TIMEOUT`. Lower `batchSize` to 8 and raise `timeoutMs` before indexing anything large. The [Self-hosted with Ollama](#self-hosted-with-ollama) section has the numbers.
 
 ### Options
 
@@ -493,7 +496,9 @@ Built-in extensions are `.txt`, `.md`, `.markdown`, `.json`, `.jsonl`, `.csv`, `
 | `separators` | paragraph, line, sentence, word | Preferred split points, most preferred first. |
 | `measure` | character count | Measures a piece of text. Pass a token counter to size chunks in tokens, which is the accurate way to keep a chunk inside a model's context window. |
 
-A chunk grows to `chunkSize` and then backs up to the last preferred boundary in that window, so chunks tend to end on a paragraph or a sentence rather than mid-word. A boundary that would leave a chunk less than half full is ignored, and a whitespace-only run never becomes a chunk.
+A chunk grows to `chunkSize` and then backs up to the last preferred boundary in that window, so chunks tend to end on a paragraph or a sentence rather than mid-word. Only the end is aligned: a chunk that overlaps the previous one starts mid-word, because the start is a character offset rather than a boundary. A boundary that would leave a chunk less than half full is ignored, and a whitespace-only run never becomes a chunk.
+
+Chunk size drives retrieval quality more than any other setting here. A question-style lookup such as "how do I change the timeout" matches a small window far better than a 1000-character one, where the answer is diluted by everything around it. `200` to `400` is a good starting range for question answering, while the `1000` default suits summarising a passage rather than finding a sentence inside one. `measure` is how you make that choice in tokens rather than characters.
 
 ### Extracting other formats
 
