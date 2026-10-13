@@ -21,6 +21,9 @@
   "types": "./dist/index.d.ts",
   "typesVersions": {
     "*": {
+      "otel": [
+        "dist/otel.d.ts"
+      ],
       "testing": [
         "dist/testing.d.ts"
       ]
@@ -45,6 +48,16 @@
       "require": {
         "types": "./dist/testing.d.cts",
         "default": "./dist/testing.cjs"
+      }
+    },
+    "./otel": {
+      "import": {
+        "types": "./dist/otel.d.ts",
+        "default": "./dist/otel.js"
+      },
+      "require": {
+        "types": "./dist/otel.d.cts",
+        "default": "./dist/otel.cjs"
       }
     },
     "./package.json": "./package.json"
@@ -77,11 +90,13 @@
     }
   },
   "dependencies": {
+    "@opentelemetry/api": "^1.9.1",
     "fastify-plugin": "^6.0.1",
     "zod": "^4.6.6"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
+    "@opentelemetry/sdk-trace-base": "^2.12.0",
     "@types/node": "^26.6.5",
     "@vitest/coverage-v8": "^5.0.3",
     "dotenv": "^18.0.7",

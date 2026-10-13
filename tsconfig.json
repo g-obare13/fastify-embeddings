@@ -19,7 +19,8 @@
     "paths": {
       "#src/*": ["./src/*"],
       "fastify-embeddings": ["./src/index.ts"],
-      "fastify-embeddings/testing": ["./src/testing.ts"]
+      "fastify-embeddings/testing": ["./src/testing.ts"],
+      "fastify-embeddings/otel": ["./src/otel.ts"]
     }
   },
   "include": ["src", "test", "examples", "docs-snippets", "scripts", "*.ts"],
