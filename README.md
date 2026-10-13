@@ -60,6 +60,7 @@ If your project embeds a handful of strings in one place, a short `fetch` call i
 - Fastify 5 when using the plugin.
 - The optional `@huggingface/transformers` peer dependency when using the in-process local provider.
 - An HTTP embedding API (for example Ollama or an OpenAI-compatible API) when using the HTTP provider.
+- **ES modules** for the examples below, which use `import` and top level `await`. In a CommonJS project, set `"type": "module"` in `package.json` or name the file `.mts`, otherwise TypeScript reports `TS1309`.
 
 ```sh
 pnpm add fastify-embeddings fastify
@@ -82,7 +83,7 @@ Model files are cached inside the installed package, at `node_modules/@huggingfa
 import Fastify from 'fastify';
 import { fastifyEmbeddings } from 'fastify-embeddings';
 
-const app = Fastify();
+const app = Fastify({ logger: true });
 await app.register(fastifyEmbeddings);
 const result = await app.embeddings.embed(['Hello vector search']);
 app.log.info(
@@ -683,7 +684,7 @@ Presets are defaults, not opaque behavior: each supplies a model name and option
 
 ## Errors
 
-All library errors are `EmbeddingError` instances with stable `code` and `statusCode` values.
+All library errors are `EmbeddingError` instances with stable `code` and `statusCode` values. The one exception is an aborted call: cancellation is yours rather than a library failure, so the reason from your `AbortSignal` is rethrown unchanged. That is a `DOMException` named `AbortError` unless you abort with a reason of your own, so handle it separately from `EmbeddingError`.
 
 | Code | HTTP status | Meaning |
 | --- | ---: | --- |

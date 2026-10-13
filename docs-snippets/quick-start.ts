@@ -1,7 +1,7 @@
 import Fastify from 'fastify';
 import { fastifyEmbeddings } from 'fastify-embeddings';
 
-const app = Fastify();
+const app = Fastify({ logger: true });
 await app.register(fastifyEmbeddings);
 const result = await app.embeddings.embed(['Hello vector search']);
 app.log.info(
