@@ -481,6 +481,8 @@ On failure the span is marked as an error, `error.type` carries the `EmbeddingEr
 
 Zero configuration is the point: `@opentelemetry/api` returns a no-op tracer until your application registers a `TracerProvider`, so the wrapper is inert until you set one up and the OpenTelemetry SDK is never a dependency of this library. Register an SDK as you normally would, for example `@opentelemetry/sdk-trace-base` with a span processor, and spans appear.
 
+The wrapper returns a plain provider: `name`, `model`, `dimensions`, `embed`, and `close`. Extra properties on the provider you wrap are not copied onto it, so if you wrap a mock provider, read `calls` from the original object rather than from the wrapper.
+
 Two caveats worth knowing:
 
 - The generative AI attributes are still marked *development* in the OpenTelemetry specification, so those names may change upstream.
