@@ -12,6 +12,7 @@ export default defineConfig({
     alias: [
       { find: /^#src\/(.*)\.js$/, replacement: `${src}$1.ts` },
       { find: /^fastify-embeddings\/otel$/, replacement: `${src}otel.ts` },
+      { find: /^fastify-embeddings\/documents$/, replacement: `${src}documents/index.ts` },
       { find: /^fastify-embeddings\/testing$/, replacement: `${src}testing.ts` },
       { find: /^fastify-embeddings$/, replacement: `${src}index.ts` },
     ],

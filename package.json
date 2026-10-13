@@ -24,6 +24,9 @@
       "otel": [
         "dist/otel.d.ts"
       ],
+      "documents": [
+        "dist/documents.d.ts"
+      ],
       "testing": [
         "dist/testing.d.ts"
       ]
@@ -58,6 +61,16 @@
       "require": {
         "types": "./dist/otel.d.cts",
         "default": "./dist/otel.cjs"
+      }
+    },
+    "./documents": {
+      "import": {
+        "types": "./dist/documents.d.ts",
+        "default": "./dist/documents.js"
+      },
+      "require": {
+        "types": "./dist/documents.d.cts",
+        "default": "./dist/documents.cjs"
       }
     },
     "./package.json": "./package.json"

@@ -11,7 +11,10 @@ export type EmbeddingErrorCode =
   | 'EMBEDDING_PROVIDER_ERROR'
   | 'EMBEDDING_RATE_LIMITED'
   | 'EMBEDDING_TIMEOUT'
-  | 'EMBEDDING_DIMENSION_MISMATCH';
+  | 'EMBEDDING_DIMENSION_MISMATCH'
+  | 'EMBEDDING_DOCUMENT_UNSUPPORTED'
+  | 'EMBEDDING_DOCUMENT_TOO_LARGE'
+  | 'EMBEDDING_DOCUMENT_INVALID';
 
 /** HTTP status used when an error reaches the optional route or a Fastify error handler. */
 const STATUS_BY_CODE: Record<EmbeddingErrorCode, number> = {
@@ -21,6 +24,9 @@ const STATUS_BY_CODE: Record<EmbeddingErrorCode, number> = {
   EMBEDDING_RATE_LIMITED: 429,
   EMBEDDING_TIMEOUT: 504,
   EMBEDDING_DIMENSION_MISMATCH: 500,
+  EMBEDDING_DOCUMENT_UNSUPPORTED: 415,
+  EMBEDDING_DOCUMENT_TOO_LARGE: 413,
+  EMBEDDING_DOCUMENT_INVALID: 400,
 };
 
 /** Codes that are retried by default because they are usually transient. */

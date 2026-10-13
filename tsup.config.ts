@@ -10,6 +10,7 @@ export default defineConfig({
     index: 'src/index.ts',
     testing: 'src/testing.ts',
     otel: 'src/otel.ts',
+    documents: 'src/documents/index.ts',
   },
   format: ['esm', 'cjs'],
   dts: true,
